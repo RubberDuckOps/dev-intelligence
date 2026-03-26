@@ -1,0 +1,9 @@
+# Dipendenze di sviluppo/test (non vanno in produzione).
+# Genera requirements-dev.txt con:
+#   pip-compile requirements-dev.in
+#
+# Per installare in locale:
+#   pip install -r requirements-dev.txt
+
+-r requirements.in
+pytest

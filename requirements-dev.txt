@@ -1,0 +1,8 @@
+# Dipendenze di sviluppo/test — NON installare in produzione.
+# Generato da requirements-dev.in.
+#
+# Installazione in locale (2 step, per compatibilità con --require-hashes in requirements.txt):
+#   pip install --require-hashes -r requirements.txt
+#   pip install -r requirements-dev.txt
+
+pytest==9.0.2

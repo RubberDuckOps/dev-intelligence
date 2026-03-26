@@ -1,0 +1,36 @@
+services:
+  dev-intelligence:
+    build:
+      context: .
+      target: runtime               # Usa solo lo stage di produzione (no build tools)
+    container_name: dev-intelligence
+    ports:
+      - "127.0.0.1:8000:8000"       # Esposto solo su localhost, non all'esterno
+    volumes:
+      - ./cache:/app/cache          # Cache diskcache persistente
+      - ./models:/app/models        # Modello GGUF persistente
+    env_file:
+      - .env
+    restart: unless-stopped
+
+    # --- Hardening sicurezza ---
+    read_only: true                  # Root filesystem in sola lettura
+    tmpfs:
+      - /tmp                         # Unica directory scrivibile temporanea
+    security_opt:
+      - no-new-privileges:true       # Impedisce escalation privilegi
+    cap_drop:
+      - ALL                          # Rimuove tutte le Linux capabilities
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s             # Grace period per download modello al primo avvio
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          memory: 3g                 # 1.5GB modello + Python/FastAPI
+          cpus: "2.0"                # Limita l'uso CPU durante inferenza LLM

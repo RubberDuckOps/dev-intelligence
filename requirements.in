@@ -1,0 +1,20 @@
+# Dipendenze dirette (non pinnate).
+# requirements.txt viene generato da questo file con:
+#   pip-compile --generate-hashes requirements.in
+#
+# Per rigenerare manualmente gli hash (es. dopo upgrade):
+#   pip download --no-deps --dest /tmp/wheels <pacchetto>==<versione>
+#   pip hash /tmp/wheels/<file>
+
+fastapi
+uvicorn
+requests
+httpx
+pydantic
+diskcache
+python-dotenv
+jinja2
+pyyaml
+llama-cpp-python
+huggingface-hub
+slowapi

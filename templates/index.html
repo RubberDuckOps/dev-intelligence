@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dev-Intelligence | Dashboard 2026</title>
+
+    <!-- Tailwind CDN: runtime JS dinamico, SRI non applicabile (contenuto generato at-runtime) -->
+    <script src="https://cdn.tailwindcss.com" nonce="{{ csp_nonce }}"></script>
+
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"
+          integrity="sha384-wFjoQjtV1y5jVHbt0p35Ui8aV8GVpEZkyF99OXWqP/eNJDU93D3Ugxkoyh6Y2I4A"
+          crossorigin="anonymous" />
+
+    <style>
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 300 700;
+            font-display: swap;
+            src: url('/static/fonts/inter-latin.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Fira Code';
+            font-style: normal;
+            font-weight: 400 500;
+            font-display: swap;
+            src: url('/static/fonts/fira-code-latin.woff2') format('woff2');
+        }
+
+        body {
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .code-font { font-family: 'Fira Code', monospace; }
+
+        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; }
+        .dot-online { background-color: #10b981; box-shadow: 0 0 8px #10b981; }
+
+        /* Custom scrollbar per la modale */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+
+        /* Toast notification */
+        #toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 100;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        #toast.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
+        #toast:not(.hidden) { opacity: 1; transform: translateY(0); }
+
+        /* Forza la preservazione dei newline nel blocco codice */
+        #codeModal pre, #codeModal code { white-space: pre !important; }
+    </style>
+</head>
+<body class="text-slate-200 antialiased">
+
+    <!-- Toast non bloccante -->
+    <div id="toast" class="hidden glass px-5 py-3 rounded-xl text-sm font-semibold text-emerald-400 border border-emerald-500/30"></div>
+
+    <div class="max-w-5xl mx-auto py-12 px-6">
+
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
+            <div>
+                <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400">
+                    Dev-Intelligence
+                </h1>
+                <p class="text-slate-400 mt-2 flex items-center gap-2">
+                    <span class="status-dot dot-online animate-pulse"></span>
+                    Gateway Sicuro Developers Italia • v2.1
+                </p>
+            </div>
+            <div class="flex gap-4">
+                <div class="glass px-4 py-2 rounded-xl text-xs font-medium text-slate-300">
+                    Caching: <span class="text-emerald-400">Attivo (Docker Vol)</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="glass p-2 rounded-2xl mb-10 shadow-2xl flex flex-col md:flex-row gap-2">
+            <input type="text" id="searchInput"
+                placeholder="Cerca un software (es. PagoPA, IO, Comune di...)"
+                class="flex-1 bg-transparent border-none py-4 px-6 focus:outline-none text-lg text-white placeholder-slate-500">
+            <button id="searchBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold transition-all transform hover:scale-[1.02] active:scale-95">
+                Esplora Catalogo
+            </button>
+        </div>
+
+        <div id="searchError" class="hidden mb-4 text-center text-amber-400 text-sm font-medium"></div>
+
+        <div id="resultsContainer" class="grid gap-4">
+            <div class="text-center py-20 border-2 border-dashed border-slate-800 rounded-3xl">
+                <p class="text-slate-500">Inserisci una parola chiave per interrogare le API nazionali</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="codeModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass w-full max-w-4xl h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl border-white/10">
+            <div class="p-5 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <div class="flex items-center gap-3">
+                    <div class="flex gap-1.5">
+                        <div class="w-3 h-3 rounded-full bg-red-500/50"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500/50"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500/50"></div>
+                    </div>
+                    <span id="modalTitle" class="ml-4 text-sm font-mono text-blue-400">sdk_generator.py</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <select id="languageSelector" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 font-mono">
+                        <option value="python">Python</option>
+                        <option value="javascript">JavaScript</option>
+                        <option value="go">Go</option>
+                        <option value="rust">Rust</option>
+                        <option value="java">Java</option>
+                    </select>
+                    <button id="closeModalBtn" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+                </div>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-y-auto p-6 bg-[#0d1117]">
+                <pre class="whitespace-pre overflow-x-auto"><code id="codeSnippet" class="language-python code-font text-sm leading-relaxed !whitespace-pre"></code></pre>
+            </div>
+
+            <div class="p-5 border-t border-white/10 bg-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
+                <p id="codeSourceBadge" class="text-[10px] text-slate-500 uppercase tracking-widest font-bold italic">Template SDK Mock • Dev-Intelligence</p>
+                <div class="flex gap-3">
+                    <button id="copyCodeBtn" class="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold transition-all">
+                        Copia Codice
+                    </button>
+                    <button id="downloadBtn" class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-900/20 transition-all">
+                        Download SDK
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"
+            integrity="sha384-06z5D//U/xpvxZHuUz92xBvq3DqBBFi7Up53HRrbV7Jlv7Yvh/MZ7oenfUe9iCEt"
+            crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"
+            integrity="sha384-WJdEkJKrbsqw0evQ4GB6mlsKe5cGTxBOw4KAEIa52ZLB7DDpliGkwdme/HMa5n1m"
+            crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"
+            integrity="sha384-D44bgYYKvaiDh4cOGlj1dbSDpSctn2FSUj118HZGmZEShZcO2v//Q5vvhNy206pp"
+            crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-go.min.js"
+            integrity="sha384-YxCco6ByOY5rJ3jD18514fa8w5so07zigIyV6tZa3CWSE5vYrbDSuFkZ5zOknnZ6"
+            crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"
+            integrity="sha384-JyDgFjMbyrE/TGiEUSXW3CLjQOySrsoiUNAlXTFdIsr/XUfaB7E+eYlR+tGQ9bCO"
+            crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"
+            integrity="sha384-DioAMZB4yk91W6LuFit5wJDh8c5Ov09f/MBvja94y0PodMqTpTZeBeejqpRUru7D"
+            crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+
+    <script nonce="{{ csp_nonce }}">
+        // ---------------------------------------------------------------------------
+        // Helpers per la sanitizzazione dell'output nel DOM (anti-XSS)
+        // ---------------------------------------------------------------------------
+        function escHtml(str) {
+            const d = document.createElement('div');
+            d.textContent = str ?? '';
+            return d.innerHTML;
+        }
+        function escAttr(str) {
+            return (str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        // ---------------------------------------------------------------------------
+        // Stato corrente della modale
+        // ---------------------------------------------------------------------------
+        let _currentSoftwareName = '';
+        let _currentSoftwareData = null;
+        let _lastSoftwareId = '';
+
+        // Toast non bloccante al posto di alert()
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = isError
+                ? 'glass px-5 py-3 rounded-xl text-sm font-semibold text-red-400 border border-red-500/30'
+                : 'glass px-5 py-3 rounded-xl text-sm font-semibold text-emerald-400 border border-emerald-500/30';
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2500);
+        }
+
+        // Funzione di Ricerca Principale
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value;
+            const container = document.getElementById('resultsContainer');
+            const errorEl = document.getElementById('searchError');
+
+            if (query.length < 3) {
+                errorEl.textContent = 'Inserisci almeno 3 caratteri per la ricerca.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            errorEl.classList.add('hidden');
+
+            container.innerHTML = `
+                <div class="text-center py-10">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500 mb-4"></div>
+                    <p class="text-slate-400 font-mono text-sm">Validazione risorse PA in corso...</p>
+                </div>
+            `;
+
+            try {
+                const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (!data.results || data.results.length === 0) {
+                    container.innerHTML = `<p class="text-center text-slate-500 py-10">Nessun software trovato per "${escHtml(query)}"</p>`;
+                    return;
+                }
+
+                container.innerHTML = '';
+
+                // Iteriamo sui risultati — usiamo appendChild invece di innerHTML +=
+                // per evitare re-parsing del DOM e XSS via concatenazione
+                for (const item of data.results) {
+                    const cardHtml = await renderSoftwareCard(item);
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = cardHtml;
+                    const cardEl = wrapper.firstElementChild;
+                    // Event listener sul pulsante (evita onclick inline con dati untrusted)
+                    const btn = cardEl.querySelector('[data-sdk-id]');
+                    if (btn) {
+                        btn.addEventListener('click', () => {
+                            requestSDK(btn.dataset.sdkId, btn.dataset.sdkName);
+                        });
+                    }
+                    container.appendChild(cardEl);
+                }
+            } catch (e) {
+                container.innerHTML = `<p class="text-center text-red-400 py-10">Errore di rete: Controlla il container Docker.</p>`;
+            }
+        }
+
+        // Renderizza la singola Card con Validazione URL
+        async function renderSoftwareCard(item) {
+            const specUrl = item.public_code_url || "";
+            let statusMarkup = `<span class="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded">NO OAS</span>`;
+            let btnClass = "opacity-30 cursor-not-allowed border-slate-700 text-slate-600";
+            let btnAction = "";
+
+            if (specUrl) {
+                try {
+                    const check = await fetch(`/validate-spec?url=${encodeURIComponent(specUrl)}`);
+                    const res = await check.json();
+
+                    if (res.valid) {
+                        statusMarkup = `<span class="text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded font-bold border border-emerald-400/20 uppercase">● OAS Validata</span>`;
+                        btnClass = "border-blue-500 text-blue-400 hover:bg-blue-600 hover:text-white shadow-lg shadow-blue-500/10";
+                        // data-* attributes invece di onclick inline per prevenire XSS
+                        btnAction = `data-sdk-id="${escAttr(item.id)}" data-sdk-name="${escAttr(item.name)}"`;
+                    } else {
+                        statusMarkup = `<span class="text-[10px] text-red-400 bg-red-400/10 px-2 py-0.5 rounded font-bold border border-red-400/20 uppercase">● Offline</span>`;
+                    }
+                } catch(e) { /* ignore */ }
+            }
+
+            return `
+                <div class="glass p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6 border-l-4 border-slate-700 hover:border-blue-500 transition-all group">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-4 mb-2">
+                            <h3 class="font-bold text-xl group-hover:text-blue-300 transition-colors">${escHtml(item.name)}</h3>
+                            ${statusMarkup}
+                        </div>
+                        <p class="text-slate-400 text-sm leading-relaxed">${escHtml(item.description?.substring(0, 120) || 'Dettagli tecnici non disponibili nel catalogo pubblico.')}...</p>
+                    </div>
+                    <button ${btnAction} class="w-full md:w-auto px-8 py-3 rounded-xl border-2 font-mono text-xs font-bold transition-all uppercase tracking-widest ${btnClass}">
+                        Generate SDK
+                    </button>
+                </div>
+            `;
+        }
+
+        // Mappa linguaggio → estensione file e classe Prism
+        const LANG_CONFIG = {
+            python:     { ext: 'py',   prismClass: 'language-python' },
+            javascript: { ext: 'js',   prismClass: 'language-javascript' },
+            go:         { ext: 'go',   prismClass: 'language-go' },
+            rust:       { ext: 'rs',   prismClass: 'language-rust' },
+            java:       { ext: 'java', prismClass: 'language-java' },
+        };
+
+        // Genera il template di codice in base al linguaggio selezionato
+        function buildCodeTemplate(name, language, endpointOas) {
+            const safeName = name.replace(/\s/g, '');
+            const source = endpointOas || 'Developers Italia Catalogo';
+
+            const templates = {
+                python: `import httpx
+import asyncio
+import uuid
+
+class ${safeName}Client:
+    """
+    Client SDK generato da Dev-Intelligence v2.1
+    Specifica Sorgente: ${source}
+    Conforme al Modello di Interoperabilità AgID (ModI)
+    """
+    def __init__(self, api_key: str = None):
+        self.base_url = "${source}"
+        self.correlation_id = str(uuid.uuid4())  # ID flusso, propagato tra servizi
+        self.headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        # TODO ModI avanzato: aggiungere Agid-JWT-Signature per PDND/e-service
+
+    async def get_service_data(self, resource_id: str):
+        modi_headers = {
+            **self.headers,
+            "X-Request-Id": str(uuid.uuid4()),       # Univoco per ogni chiamata
+            "X-Correlation-Id": self.correlation_id,  # Traccia il flusso tra servizi
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{self.base_url}/data/{resource_id}", headers=modi_headers)
+            response.raise_for_status()
+            return response.json()
+
+# Esempio di utilizzo:
+# async def main():
+#     client = ${safeName}Client()
+#     data = await client.get_service_data("test-id")
+#     print(data)`,
+
+                javascript: `// Client SDK generato da Dev-Intelligence v2.1
+// Specifica Sorgente: ${source}
+// Conforme al Modello di Interoperabilità AgID (ModI)
+// TODO ModI avanzato: aggiungere Agid-JWT-Signature per PDND/e-service
+
+class ${safeName}Client {
+    constructor(apiKey = null) {
+        this.baseUrl = '${source}';
+        this.correlationId = crypto.randomUUID(); // Propagato nel flusso tra servizi
+        this.headers = apiKey ? { Authorization: \`Bearer \${apiKey}\` } : {};
+    }
+
+    async getServiceData(resourceId) {
+        const headers = {
+            ...this.headers,
+            'X-Request-Id': crypto.randomUUID(),      // Univoco per ogni chiamata
+            'X-Correlation-Id': this.correlationId,   // Traccia il flusso tra servizi
+        };
+        const res = await fetch(\`\${this.baseUrl}/data/\${resourceId}\`, { headers });
+        if (!res.ok) throw new Error(\`HTTP error: \${res.status}\`);
+        return res.json();
+    }
+}
+
+// Esempio di utilizzo:
+// const client = new ${safeName}Client();
+// client.getServiceData('test-id').then(console.log);`,
+
+                go: `// Client SDK generato da Dev-Intelligence v2.1
+// Specifica Sorgente: ${source}
+// Conforme al Modello di Interoperabilità AgID (ModI)
+// TODO ModI avanzato: aggiungere Agid-JWT-Signature per PDND/e-service
+// Dipendenza UUID: go get github.com/google/uuid
+package ${safeName.toLowerCase()}
+
+import (
+    "encoding/json"
+    "fmt"
+    "net/http"
+
+    "github.com/google/uuid"
+)
+
+type Client struct {
+    BaseURL       string
+    APIKey        string
+    CorrelationID string // Propagato nel flusso tra servizi
+}
+
+func New(apiKey string) *Client {
+    return &Client{
+        BaseURL:       "${source}",
+        APIKey:        apiKey,
+        CorrelationID: uuid.New().String(),
+    }
+}
+
+func (c *Client) GetServiceData(resourceID string) (map[string]interface{}, error) {
+    req, _ := http.NewRequest("GET", fmt.Sprintf("%s/data/%s", c.BaseURL, resourceID), nil)
+    if c.APIKey != "" {
+        req.Header.Set("Authorization", "Bearer "+c.APIKey)
+    }
+    req.Header.Set("X-Request-Id", uuid.New().String())     // Univoco per ogni chiamata
+    req.Header.Set("X-Correlation-Id", c.CorrelationID)    // Traccia il flusso tra servizi
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    var result map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&result)
+    return result, nil
+}`,
+
+                rust: `// Client SDK generato da Dev-Intelligence v2.1
+// Specifica Sorgente: ${source}
+// Conforme al Modello di Interoperabilità AgID (ModI)
+// TODO ModI avanzato: aggiungere Agid-JWT-Signature per PDND/e-service
+// Dipendenze Cargo.toml: reqwest = { features = ["json"] }, uuid = { features = ["v4"] }
+use reqwest::Client;
+use serde_json::Value;
+use uuid::Uuid;
+
+pub struct ${safeName}Client {
+    base_url: String,
+    api_key: Option<String>,
+    correlation_id: String, // Propagato nel flusso tra servizi
+    client: Client,
+}
+
+impl ${safeName}Client {
+    pub fn new(api_key: Option<String>) -> Self {
+        Self {
+            base_url: "${source}".to_string(),
+            api_key,
+            correlation_id: Uuid::new_v4().to_string(),
+            client: Client::new(),
+        }
+    }
+
+    pub async fn get_service_data(&self, resource_id: &str) -> Result<Value, reqwest::Error> {
+        let url = format!("{}/data/{}", self.base_url, resource_id);
+        let mut req = self.client.get(&url)
+            .header("X-Request-Id", Uuid::new_v4().to_string())    // Univoco per ogni chiamata
+            .header("X-Correlation-Id", &self.correlation_id);     // Traccia il flusso tra servizi
+        if let Some(key) = &self.api_key {
+            req = req.bearer_auth(key);
+        }
+        req.send().await?.json().await
+    }
+}`,
+
+                java: `// Client SDK generato da Dev-Intelligence v2.1
+// Specifica Sorgente: ${source}
+// Conforme al Modello di Interoperabilità AgID (ModI)
+// TODO ModI avanzato: aggiungere Agid-JWT-Signature per PDND/e-service
+import java.net.URI;
+import java.net.http.*;
+import java.util.Optional;
+import java.util.UUID;
+
+public class ${safeName}Client {
+    private final String baseUrl = "${source}";
+    private final Optional<String> apiKey;
+    private final String correlationId = UUID.randomUUID().toString(); // Propagato nel flusso
+    private final HttpClient http = HttpClient.newHttpClient();
+
+    public ${safeName}Client(String apiKey) {
+        this.apiKey = Optional.ofNullable(apiKey);
+    }
+
+    public String getServiceData(String resourceId) throws Exception {
+        var builder = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + "/data/" + resourceId))
+            .header("X-Request-Id", UUID.randomUUID().toString())  // Univoco per ogni chiamata
+            .header("X-Correlation-Id", correlationId)             // Traccia il flusso tra servizi
+            .GET();
+        apiKey.ifPresent(k -> builder.header("Authorization", "Bearer " + k));
+        var response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) throw new RuntimeException("HTTP " + response.statusCode());
+        return response.body();
+    }
+}`,
+            };
+
+            return templates[language] || templates.python;
+        }
+
+        // Apertura Modale e Generazione Codice
+        async function requestSDK(id, name) {
+            const modal = document.getElementById('codeModal');
+            const codeBox = document.getElementById('codeSnippet');
+            const langSelector = document.getElementById('languageSelector');
+
+            _currentSoftwareName = name;
+            _currentSoftwareData = null;
+            _lastSoftwareId = id;
+
+            langSelector.value = 'python';
+            const lang = 'python';
+            const { ext, prismClass } = LANG_CONFIG[lang];
+
+            document.getElementById('modalTitle').innerText = `${name.toLowerCase().replace(/\s/g, '_')}_client.${ext}`;
+            codeBox.className = `${prismClass} code-font text-sm leading-relaxed`;
+
+            modal.classList.remove('hidden');
+            codeBox.textContent = "# Recupero metadati API in corso...\n# Generazione SDK...";
+
+            try {
+                const response = await fetch('/generate-sdk/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ software_id: id, target_language: lang })
+                });
+                const data = await response.json();
+                _currentSoftwareData = data;
+
+                codeBox.textContent = data.code || buildCodeTemplate(name, lang, data.endpoint_oas);
+                Prism.highlightElement(codeBox);
+
+                const badge = document.getElementById('codeSourceBadge');
+                if (data.code && data.model !== 'fallback') {
+                    badge.textContent = 'Generato da Qwen2.5-Coder-0.5B • Dev-Intelligence';
+                    badge.style.color = 'rgb(52 211 153 / 0.7)';
+                } else {
+                    badge.textContent = 'Template SDK Mock • Dev-Intelligence';
+                    badge.style.color = '';
+                }
+            } catch (e) {
+                codeBox.textContent = "# Errore critico durante la generazione del codice.\n# Verifica i log del container Docker.";
+            }
+        }
+
+        // Cambio linguaggio dalla select nella modale
+        async function changeLanguage() {
+            const lang = document.getElementById('languageSelector').value;
+            const { ext, prismClass } = LANG_CONFIG[lang];
+            const codeBox = document.getElementById('codeSnippet');
+
+            document.getElementById('modalTitle').innerText =
+                `${_currentSoftwareName.toLowerCase().replace(/\s/g, '_')}_client.${ext}`;
+            codeBox.className = `${prismClass} code-font text-sm leading-relaxed`;
+
+            const usedLLM = _currentSoftwareData?.model && _currentSoftwareData.model !== 'fallback';
+            if (_lastSoftwareId && usedLLM) {
+                codeBox.textContent = "# Rigenerazione con Qwen2.5-Coder...";
+                try {
+                    const response = await fetch('/generate-sdk/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ software_id: _lastSoftwareId, target_language: lang })
+                    });
+                    const data = await response.json();
+                    _currentSoftwareData = data;
+                    codeBox.textContent = data.code || buildCodeTemplate(_currentSoftwareName, lang, data.endpoint_oas);
+
+                    const badge = document.getElementById('codeSourceBadge');
+                    if (data.code && data.model !== 'fallback') {
+                        badge.textContent = 'Generato da Qwen2.5-Coder-0.5B • Dev-Intelligence';
+                        badge.style.color = 'rgb(52 211 153 / 0.7)';
+                    } else {
+                        badge.textContent = 'Template SDK Mock • Dev-Intelligence';
+                        badge.style.color = '';
+                    }
+                } catch {
+                    codeBox.textContent = buildCodeTemplate(_currentSoftwareName, lang, _currentSoftwareData?.endpoint_oas);
+                }
+            } else {
+                codeBox.textContent = buildCodeTemplate(_currentSoftwareName, lang, _currentSoftwareData?.endpoint_oas);
+            }
+            Prism.highlightElement(codeBox);
+        }
+
+        function closeModal() {
+            document.getElementById('codeModal').classList.add('hidden');
+        }
+
+        function copyCode() {
+            const code = document.getElementById('codeSnippet').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                showToast('Codice copiato negli appunti!');
+            });
+        }
+
+        function downloadSDK() {
+            const lang = document.getElementById('languageSelector').value;
+            const { ext } = LANG_CONFIG[lang];
+            const code = document.getElementById('codeSnippet').textContent;
+            const filename = `${_currentSoftwareName.toLowerCase().replace(/\s/g, '_')}_client.${ext}`;
+
+            const blob = new Blob([code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`Download avviato: ${filename}`);
+        }
+
+        // ---------------------------------------------------------------------------
+        // Event listener — registrati al DOMContentLoaded (nessun handler inline)
+        // ---------------------------------------------------------------------------
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('searchInput').addEventListener('keypress', e => {
+                if (e.key === 'Enter') performSearch();
+            });
+            document.getElementById('searchBtn').addEventListener('click', performSearch);
+            document.getElementById('languageSelector').addEventListener('change', changeLanguage);
+            document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+            document.getElementById('copyCodeBtn').addEventListener('click', copyCode);
+            document.getElementById('downloadBtn').addEventListener('click', downloadSDK);
+        });
+    </script>
+</body>
+</html>

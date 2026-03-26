@@ -1,0 +1,58 @@
+publiccodeYmlVersion: "0.4.0"
+
+name: Dev-Intelligence
+url: "https://github.com/RubberDuckOps/dev-intelligence"
+releaseDate: "2026-03-01"
+softwareVersion: "1.0.0"
+
+platforms:
+  - web
+
+categories:
+  - it-development
+
+developmentStatus: stable
+
+softwareType: "standalone/web"
+
+description:
+  it:
+    localisedName: Dev-Intelligence
+    shortDescription: >
+      Gateway intelligente e generatore di SDK per l'interoperabilità
+      della Pubblica Amministrazione italiana.
+    longDescription: >
+      Dev-Intelligence permette agli sviluppatori di esplorare il catalogo Developers Italia,
+      validare le specifiche OpenAPI dei software a riuso e generare codice client tramite
+      un LLM locale (Qwen2.5-Coder-0.5B), il tutto in un'interfaccia sicura e completamente
+      containerizzata. Il software automatizza il flusso di integrazione in tre passi:
+      ricerca nel catalogo ufficiale PA, validazione automatica della disponibilità delle
+      specifiche OpenAPI, e generazione di client SDK in Python, JavaScript, Go, Rust o Java
+      tramite inferenza locale senza invio di dati a server esterni.
+    features:
+      - Ricerca nel catalogo software PA di Developers Italia
+      - Validazione automatica disponibilità specifiche OpenAPI
+      - Generazione SDK via LLM locale (nessuna API esterna, nessun dato inviato)
+      - Supporto Python, JavaScript, Go, Rust, Java
+      - Cache persistente e hardening sicurezza container
+      - Font self-hosted (GDPR-friendly, nessun tracciamento esterno)
+    screenshots:
+      - ".github/assets/dev-intelligence-home.png"
+
+legal:
+  license: MIT
+  mainCopyrightOwner: RubberDuckOps
+  repoOwner: RubberDuckOps
+
+maintenance:
+  type: community
+  contacts:
+    - name: RubberDuckOps
+
+localisation:
+  localisationReady: false
+  availableLanguages:
+    - it
+
+it:
+  countryExtensionVersion: "1.0"
