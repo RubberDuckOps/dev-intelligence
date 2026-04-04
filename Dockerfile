@@ -55,3 +55,16 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+# =============================================================================
+# Stage 3: test — estende runtime aggiungendo pytest (non va in produzione)
+# =============================================================================
+FROM runtime AS test
+
+USER root
+COPY requirements-dev.txt pytest.ini ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+USER appuser
+
+CMD ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]

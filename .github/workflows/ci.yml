@@ -12,13 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t dev-intelligence:ci .
+      - name: Build Docker test image
+        run: docker build --target test -t dev-intelligence:test .
 
       - name: Run tests (SKIP_LLM=true per evitare download modello)
         run: |
           docker run --rm \
             -e SKIP_LLM=true \
             -e CACHE_DIR=/tmp/test-cache \
-            dev-intelligence:ci \
+            dev-intelligence:test \
             python -m pytest tests/ -v --tb=short

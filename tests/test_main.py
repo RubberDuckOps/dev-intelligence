@@ -6,7 +6,6 @@ import httpx
 import requests
 from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
-from diskcache import Cache
 
 import main
 from main import (
@@ -267,54 +266,48 @@ class TestIsPrivateHost:
 class TestCheckSsrfSafe:
     """Testa _check_ssrf_safe per IP literal (nessuna risoluzione DNS necessaria)."""
 
-    def test_localhost_bloccato(self):
-        assert asyncio.run(_check_ssrf_safe("localhost")) is None
+    async def test_localhost_bloccato(self):
+        assert await _check_ssrf_safe("localhost") is None
 
-    def test_stringa_vuota_bloccata(self):
-        assert asyncio.run(_check_ssrf_safe("")) is None
+    async def test_stringa_vuota_bloccata(self):
+        assert await _check_ssrf_safe("") is None
 
-    def test_ip_127_bloccato(self):
-        assert asyncio.run(_check_ssrf_safe("127.0.0.1")) is None
+    async def test_ip_127_bloccato(self):
+        assert await _check_ssrf_safe("127.0.0.1") is None
 
-    def test_ip_10_bloccato(self):
-        assert asyncio.run(_check_ssrf_safe("10.0.0.1")) is None
+    async def test_ip_10_bloccato(self):
+        assert await _check_ssrf_safe("10.0.0.1") is None
 
-    def test_ip_192_168_bloccato(self):
-        assert asyncio.run(_check_ssrf_safe("192.168.0.1")) is None
+    async def test_ip_192_168_bloccato(self):
+        assert await _check_ssrf_safe("192.168.0.1") is None
 
-    def test_ip_172_16_bloccato(self):
-        assert asyncio.run(_check_ssrf_safe("172.16.0.1")) is None
+    async def test_ip_172_16_bloccato(self):
+        assert await _check_ssrf_safe("172.16.0.1") is None
 
-    def test_ip_169_254_bloccato(self):
-        assert asyncio.run(_check_ssrf_safe("169.254.169.254")) is None
+    async def test_ip_169_254_bloccato(self):
+        assert await _check_ssrf_safe("169.254.169.254") is None
 
-    def test_ip_pubblico_8_8_8_8_permesso(self):
-        assert asyncio.run(_check_ssrf_safe("8.8.8.8")) == "8.8.8.8"
+    async def test_ip_pubblico_8_8_8_8_permesso(self):
+        assert await _check_ssrf_safe("8.8.8.8") == "8.8.8.8"
 
-    def test_ip_pubblico_1_1_1_1_permesso(self):
-        assert asyncio.run(_check_ssrf_safe("1.1.1.1")) == "1.1.1.1"
+    async def test_ip_pubblico_1_1_1_1_permesso(self):
+        assert await _check_ssrf_safe("1.1.1.1") == "1.1.1.1"
 
-    def test_dns_errore_fail_safe_blocca(self):
+    async def test_dns_errore_fail_safe_blocca(self, mocker):
         """In caso di errore DNS, _check_ssrf_safe deve bloccare (fail-safe)."""
-        async def run():
-            with patch("main.asyncio.get_running_loop") as mock_get_loop:
-                mock_loop = MagicMock()
-                mock_loop.getaddrinfo = AsyncMock(side_effect=OSError("NXDOMAIN"))
-                mock_get_loop.return_value = mock_loop
-                return await _check_ssrf_safe("nonexistent.invalid.tld")
-        assert asyncio.run(run()) is None
+        mock_loop = MagicMock()
+        mock_loop.getaddrinfo = AsyncMock(side_effect=OSError("NXDOMAIN"))
+        mocker.patch("main.asyncio.get_running_loop", return_value=mock_loop)
+        assert await _check_ssrf_safe("nonexistent.invalid.tld") is None
 
-    def test_dns_risolve_a_ip_privato_bloccato(self):
+    async def test_dns_risolve_a_ip_privato_bloccato(self, mocker):
         """Se il DNS risolve verso un IP privato, la richiesta deve essere bloccata."""
-        async def run():
-            with patch("main.asyncio.get_running_loop") as mock_get_loop:
-                mock_loop = MagicMock()
-                mock_loop.getaddrinfo = AsyncMock(
-                    return_value=[(None, None, None, None, ("192.168.1.100", 0))]
-                )
-                mock_get_loop.return_value = mock_loop
-                return await _check_ssrf_safe("rebinding.attacker.com")
-        assert asyncio.run(run()) is None
+        mock_loop = MagicMock()
+        mock_loop.getaddrinfo = AsyncMock(
+            return_value=[(None, None, None, None, ("192.168.1.100", 0))]
+        )
+        mocker.patch("main.asyncio.get_running_loop", return_value=mock_loop)
+        assert await _check_ssrf_safe("rebinding.attacker.com") is None
 
 
 # ===========================================================================
@@ -566,20 +559,6 @@ class TestGenerateSDK:
 # GET /validate-spec
 # ===========================================================================
 
-def _make_mock_client(status_code=None, side_effect=None):
-    """Helper: crea un mock di httpx.AsyncClient."""
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    if side_effect:
-        mock_client.head = AsyncMock(side_effect=side_effect)
-    else:
-        mock_response = MagicMock()
-        mock_response.status_code = status_code
-        mock_client.head = AsyncMock(return_value=mock_response)
-    return mock_client
-
-
 class TestValidateSpec:
 
     def test_url_http_ritorna_false(self):
@@ -608,68 +587,52 @@ class TestValidateSpec:
         assert resp.json()["valid"] is False
         assert resp.json()["reason"] == "URL non consentito"
 
-    def test_status_200_ritorna_valid_true(self):
-        mock_client = _make_mock_client(status_code=200)
-        with patch("main._check_ssrf_safe", new_callable=AsyncMock, return_value="93.184.216.34"):
-            with patch("main.httpx.AsyncClient", return_value=mock_client):
-                resp = client.get("/validate-spec?url=https://example.com/api")
+    def test_status_200_ritorna_valid_true(self, mock_http_client):
+        mock_http_client(status_code=200)
+        resp = client.get("/validate-spec?url=https://example.com/api")
         assert resp.json()["valid"] is True
         assert resp.json()["status"] == 200
 
-    def test_status_204_ritorna_valid_true(self):
-        mock_client = _make_mock_client(status_code=204)
-        with patch("main._check_ssrf_safe", new_callable=AsyncMock, return_value="93.184.216.34"):
-            with patch("main.httpx.AsyncClient", return_value=mock_client):
-                resp = client.get("/validate-spec?url=https://example.com/api")
+    def test_status_204_ritorna_valid_true(self, mock_http_client):
+        mock_http_client(status_code=204)
+        resp = client.get("/validate-spec?url=https://example.com/api")
         assert resp.json()["valid"] is True
 
-    def test_status_404_ritorna_valid_false(self):
-        mock_client = _make_mock_client(status_code=404)
-        with patch("main._check_ssrf_safe", new_callable=AsyncMock, return_value="93.184.216.34"):
-            with patch("main.httpx.AsyncClient", return_value=mock_client):
-                resp = client.get("/validate-spec?url=https://example.com/api")
+    def test_status_404_ritorna_valid_false(self, mock_http_client):
+        mock_http_client(status_code=404)
+        resp = client.get("/validate-spec?url=https://example.com/api")
         assert resp.json()["valid"] is False
 
-    def test_status_500_ritorna_valid_false(self):
-        mock_client = _make_mock_client(status_code=500)
-        with patch("main._check_ssrf_safe", new_callable=AsyncMock, return_value="93.184.216.34"):
-            with patch("main.httpx.AsyncClient", return_value=mock_client):
-                resp = client.get("/validate-spec?url=https://example.com/api")
+    def test_status_500_ritorna_valid_false(self, mock_http_client):
+        mock_http_client(status_code=500)
+        resp = client.get("/validate-spec?url=https://example.com/api")
         assert resp.json()["valid"] is False
 
-    def test_timeout_ritorna_valid_false(self):
-        mock_client = _make_mock_client(side_effect=httpx.TimeoutException("timeout"))
-        with patch("main._check_ssrf_safe", new_callable=AsyncMock, return_value="93.184.216.34"):
-            with patch("main.httpx.AsyncClient", return_value=mock_client):
-                resp = client.get("/validate-spec?url=https://example.com/api")
+    def test_timeout_ritorna_valid_false(self, mock_http_client):
+        mock_http_client(side_effect=httpx.TimeoutException("timeout"))
+        resp = client.get("/validate-spec?url=https://example.com/api")
         assert resp.json()["valid"] is False
         assert resp.json()["reason"] == "Server non raggiungibile"
 
-    def test_connessione_fallita_ritorna_valid_false(self):
-        mock_client = _make_mock_client(side_effect=httpx.ConnectError("refused"))
-        with patch("main._check_ssrf_safe", new_callable=AsyncMock, return_value="93.184.216.34"):
-            with patch("main.httpx.AsyncClient", return_value=mock_client):
-                resp = client.get("/validate-spec?url=https://unreachable.example.com/api")
+    def test_connessione_fallita_ritorna_valid_false(self, mock_http_client):
+        mock_http_client(side_effect=httpx.ConnectError("refused"))
+        resp = client.get("/validate-spec?url=https://unreachable.example.com/api")
         assert resp.json()["valid"] is False
         assert resp.json()["reason"] == "Server non raggiungibile"
 
-    def test_risultato_messo_in_cache(self, isolated_cache):
+    def test_risultato_messo_in_cache(self, isolated_cache, mock_http_client):
         url = "https://example.com/api"
         expected_key = f"validate_{hashlib.sha256(url.encode()).hexdigest()}"
-        mock_client = _make_mock_client(status_code=200)
-        with patch("main._check_ssrf_safe", new_callable=AsyncMock, return_value="93.184.216.34"):
-            with patch("main.httpx.AsyncClient", return_value=mock_client):
-                client.get(f"/validate-spec?url={url}")
+        mock_http_client(status_code=200)
+        client.get(f"/validate-spec?url={url}")
         assert isolated_cache.get(expected_key) is not None
 
-    def test_seconda_chiamata_usa_cache_senza_richiesta_http(self, isolated_cache):
-        mock_client = _make_mock_client(status_code=200)
-        with patch("main._check_ssrf_safe", new_callable=AsyncMock, return_value="93.184.216.34"):
-            with patch("main.httpx.AsyncClient", return_value=mock_client) as mock_hx:
-                client.get("/validate-spec?url=https://example.com/api")
-                client.get("/validate-spec?url=https://example.com/api")
+    def test_seconda_chiamata_usa_cache_senza_richiesta_http(self, isolated_cache, mock_http_client):
+        m = mock_http_client(status_code=200)
+        client.get("/validate-spec?url=https://example.com/api")
+        client.get("/validate-spec?url=https://example.com/api")
         # La seconda chiamata non deve istanziare un nuovo AsyncClient
-        assert mock_hx.call_count == 1
+        assert m.client_class.call_count == 1
 
 
 # ===========================================================================
@@ -749,29 +712,20 @@ class TestHealth:
 class TestRecentChanges:
     """Test per le modifiche User-Agent e header ModI (marzo 2026)."""
 
-    def test_get_catalog_invia_user_agent(self):
+    def test_get_catalog_invia_user_agent(self, requests_response, mocker):
         """_get_catalog() deve passare User-Agent a requests.get."""
-        fake_response = MagicMock()
-        fake_response.json.return_value = {"data": [], "links": {}}
-        fake_response.raise_for_status = MagicMock()
-        with patch("main.requests.get", return_value=fake_response) as mock_get:
-            main._get_catalog()
+        resp = requests_response({"data": [], "links": {}})
+        mock_get = mocker.patch("main.requests.get", return_value=resp)
+        main._get_catalog()
         assert mock_get.called
         call_headers = mock_get.call_args.kwargs.get("headers", {})
         assert call_headers.get("User-Agent") == USER_AGENT
 
-    def test_validate_spec_invia_user_agent(self):
+    def test_validate_spec_invia_user_agent(self, mock_http_client):
         """/validate-spec deve includere User-Agent nell'header httpx."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.head = AsyncMock(return_value=mock_response)
-        with patch("main._check_ssrf_safe", new_callable=AsyncMock, return_value="93.184.216.34"):
-            with patch("main.httpx.AsyncClient", return_value=mock_client):
-                client.get("/validate-spec?url=https://example.com/api/openapi.json")
-        call_headers = mock_client.head.call_args.kwargs.get("headers", {})
+        m = mock_http_client(status_code=200)
+        client.get("/validate-spec?url=https://example.com/api/openapi.json")
+        call_headers = m.client.head.call_args.kwargs.get("headers", {})
         assert call_headers.get("User-Agent") == USER_AGENT
 
     def test_prompt_llm_contiene_header_modi(self):
@@ -809,69 +763,54 @@ _RAW_ITEM_B = {
 }
 
 
-def _make_requests_mock(data: dict) -> MagicMock:
-    """Helper: crea un mock di requests.Response con json() e raise_for_status()."""
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = data
-    mock_resp.raise_for_status = MagicMock()
-    return mock_resp
-
-
 # ===========================================================================
 # §8.1 — _get_catalog(): paginazione e double-checked locking
 # ===========================================================================
 
 class TestGetCatalogPagination:
 
-    def test_singola_pagina_senza_next(self):
-        resp = _make_requests_mock({"data": [_RAW_ITEM_A], "links": {}})
-        with patch("main.requests.get", return_value=resp):
-            result = main._get_catalog()
+    def test_singola_pagina_senza_next(self, requests_response, mocker):
+        resp = requests_response({"data": [_RAW_ITEM_A], "links": {}})
+        mocker.patch("main.requests.get", return_value=resp)
+        result = main._get_catalog()
         assert len(result) == 1
         assert result[0]["id"] == "cat-a"
 
-    def test_multi_pagina_segue_cursore(self):
-        resp1 = _make_requests_mock({
-            "data": [_RAW_ITEM_A],
-            "links": {"next": "?page[after]=cursor123"},
-        })
-        resp2 = _make_requests_mock({"data": [_RAW_ITEM_B], "links": {}})
-        with patch("main.requests.get", side_effect=[resp1, resp2]) as mock_get:
-            result = main._get_catalog()
+    def test_multi_pagina_segue_cursore(self, requests_response, mocker):
+        resp1 = requests_response({"data": [_RAW_ITEM_A], "links": {"next": "?page[after]=cursor123"}})
+        resp2 = requests_response({"data": [_RAW_ITEM_B], "links": {}})
+        mock_get = mocker.patch("main.requests.get", side_effect=[resp1, resp2])
+        result = main._get_catalog()
         assert len(result) == 2
         assert mock_get.call_count == 2
         second_params = mock_get.call_args_list[1].kwargs.get("params", {})
         assert second_params.get("page[after]") == "cursor123"
 
-    def test_errore_su_pagina_intermedia_propaga_eccezione(self):
-        resp1 = _make_requests_mock({
-            "data": [_RAW_ITEM_A],
-            "links": {"next": "?page[after]=cursor123"},
-        })
-        resp2 = _make_requests_mock({"data": [], "links": {}})
-        resp2.raise_for_status.side_effect = requests.HTTPError("500 Server Error")
-        with patch("main.requests.get", side_effect=[resp1, resp2]):
-            with pytest.raises(requests.HTTPError):
-                main._get_catalog()
-
-    def test_cache_key_catalog_v1(self, isolated_cache):
-        resp = _make_requests_mock({"data": [_RAW_ITEM_A], "links": {}})
-        with patch("main.requests.get", return_value=resp):
+    def test_errore_su_pagina_intermedia_propaga_eccezione(self, requests_response, mocker):
+        resp1 = requests_response({"data": [_RAW_ITEM_A], "links": {"next": "?page[after]=cursor123"}})
+        resp2 = requests_response({"data": [], "links": {}}, raise_http_error=True)
+        mocker.patch("main.requests.get", side_effect=[resp1, resp2])
+        with pytest.raises(requests.HTTPError):
             main._get_catalog()
+
+    def test_cache_key_catalog_v1(self, isolated_cache, requests_response, mocker):
+        resp = requests_response({"data": [_RAW_ITEM_A], "links": {}})
+        mocker.patch("main.requests.get", return_value=resp)
+        main._get_catalog()
         assert isolated_cache.get("catalog_v1") is not None
 
-    def test_double_checked_locking_una_sola_fetch(self):
-        resp = _make_requests_mock({"data": [_RAW_ITEM_A], "links": {}})
+    def test_double_checked_locking_una_sola_fetch(self, requests_response, mocker):
+        resp = requests_response({"data": [_RAW_ITEM_A], "links": {}})
+        mock_get = mocker.patch("main.requests.get", return_value=resp)
         results: list = []
-        with patch("main.requests.get", return_value=resp) as mock_get:
-            threads = [
-                threading.Thread(target=lambda: results.append(main._get_catalog()))
-                for _ in range(2)
-            ]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
+        threads = [
+            threading.Thread(target=lambda: results.append(main._get_catalog()))
+            for _ in range(2)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
         assert mock_get.call_count == 1
         assert len(results) == 2
 
