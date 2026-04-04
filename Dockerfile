@@ -64,6 +64,7 @@ FROM runtime AS test
 
 USER root
 COPY requirements-dev.txt pytest.ini ./
+COPY tests/ ./tests/
 RUN pip install --no-cache-dir -r requirements-dev.txt
 USER appuser
 
